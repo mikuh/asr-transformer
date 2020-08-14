@@ -15,13 +15,13 @@ class MultiHeadAttention(tf.keras.layers.Layer):
                  bias_constraint=None,
                  activity_regularizer=None,
                  dropout_rate=0.0,
-                 training=True,
+                 is_training=True,
                  **kwargs):
         super(MultiHeadAttention, self).__init__(**kwargs)
         self._num_heads = num_heads
         self._head_size = head_size
         self._dropout_rate = dropout_rate
-        self._training = training
+        self._training = is_training
 
         self._query_dense = DenseEinsum(
             output_shape=(self._num_heads, self._head_size),
