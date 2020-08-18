@@ -59,14 +59,16 @@ def create_asr_transfer_dataset(file_path,
     if input_pipeline_context and input_pipeline_context.num_input_pipelines > 1:
         dataset = dataset.shard(input_pipeline_context.num_input_pipelines,
                                 input_pipeline_context.input_pipeline_id)
+    ds_size = sum([1 for _ in dataset])
 
     def _select_data_from_record(record):
-        x = {
-            'source_input': tf.reshape(record['source_input'], [-1, feature_dim]),
-            'source_mask': record['source_mask'],
-            'target_input': record['target'][:, :-1]
-        }
-        y = record['target'][:, 1:]
+        # x = {
+        #     'source_input': tf.reshape(record['source_input'], [-1, feature_dim]),
+        #     'source_mask': record['source_mask'],
+        #     'target_input': record['target'][:, :-1]
+        # }
+        x = (tf.reshape(record['source_input'], (-1, feature_dim)), record['source_mask'], record['target'][:-1])
+        y = record['target'][1:]
         return (x, y)
 
     dataset = dataset.map(_select_data_from_record)
@@ -77,63 +79,35 @@ def create_asr_transfer_dataset(file_path,
 
     dataset = dataset.batch(batch_size, drop_remainder=is_training)
     dataset = dataset.prefetch(1024)
-    return dataset
-
-
-def create_classifier_dataset(file_path,
-                              seq_length,
-                              batch_size,
-                              is_training=True,
-                              input_pipeline_context=None):
-    """Creates input dataset from (tf)records files for train/eval."""
-    name_to_features = {
-        'input_ids': tf.io.FixedLenFeature([seq_length], tf.int64),
-        'input_mask': tf.io.FixedLenFeature([seq_length], tf.int64),
-        'segment_ids': tf.io.FixedLenFeature([seq_length], tf.int64),
-        'label_id': tf.io.FixedLenFeature([], tf.int64),
-        'is_real_example': tf.io.FixedLenFeature([], tf.int64),
-    }
-    dataset = single_file_dataset(file_path, name_to_features)
-
-    # The dataset is always sharded by number of hosts.
-    # num_input_pipelines is the number of hosts rather than number of cores.
-    if input_pipeline_context and input_pipeline_context.num_input_pipelines > 1:
-        dataset = dataset.shard(input_pipeline_context.num_input_pipelines,
-                                input_pipeline_context.input_pipeline_id)
-
-    def _select_data_from_record(record):
-        x = {
-            'input_word_ids': record['input_ids'],
-            'input_mask': record['input_mask'],
-            'input_type_ids': record['segment_ids']
-        }
-        y = record['label_id']
-        return (x, y)
-
-    dataset = dataset.map(_select_data_from_record)
-    if is_training:
-        dataset = dataset.shuffle(100)
-        dataset = dataset.repeat()
-
-    dataset = dataset.batch(batch_size, drop_remainder=is_training)
-    dataset = dataset.prefetch(1024)
-    return dataset
+    return dataset, ds_size
 
 
 if __name__ == '__main__':
-    name_to_features = {
-        'source_input': tf.io.FixedLenFeature([1000 * 26], tf.float32),
-        'source_mask': tf.io.FixedLenFeature([1000], tf.int64),
-        'target': tf.io.FixedLenFeature([50], tf.int64),
-        'is_real_example': tf.io.FixedLenFeature([1], tf.int64),
-    }
+    # name_to_features = {
+    #     'source_input': tf.io.FixedLenFeature([1000 * 26], tf.float32),
+    #     'source_mask': tf.io.FixedLenFeature([1000], tf.int64),
+    #     'target': tf.io.FixedLenFeature([50], tf.int64),
+    #     'is_real_example': tf.io.FixedLenFeature([1], tf.int64),
+    # }
+    #
+    # d = single_file_dataset(
+    #     "/home/geb/PycharmProjects/asr-transformer/data/test.record",
+    #     name_to_features)
+    # print(d)
+    # for x in d:
+    #     a = tf.reshape(x["source_input"], (-1, 26))
+    #     print(a)
+    #     print(a.shape)
+    #     print(x["source_mask"].shape)
+    #     print(x["target"].shape)
+    #     break
 
-    d = single_file_dataset(
-        "/home/geb/PycharmProjects/asr-transformer/data/test.record",
-        name_to_features)
+    train_data, ds_size = create_asr_transfer_dataset("/home/geb/PycharmProjects/asr-transformer/data/test.record",
+                                             1000,
+                                             26,
+                                             50,
+                                             32,
+                                             True)
 
-    for x in d:
-        a = tf.reshape(x["source_input"], (-1, 26))
-        print(a)
-        print(a.shape)
-        break
+    print(train_data)
+    print(ds_size)

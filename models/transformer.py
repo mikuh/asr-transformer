@@ -4,7 +4,8 @@ from utils import create_padding_mask, create_look_ahead_mask
 
 
 class Transformer(tf.keras.Model):
-    def __init__(self, num_layers, d_model, num_heads, dff, target_vocab_size, pe_input, pe_target, rate=0.1):
+    def __init__(self, num_layers, d_model, num_heads, dff, target_vocab_size, pe_input, pe_target, rate=0.1,
+                 training=True):
         super(Transformer, self).__init__()
 
         self.encoder = Encoder(num_layers, d_model, num_heads, dff, pe_input, rate)
@@ -14,22 +15,21 @@ class Transformer(tf.keras.Model):
 
         self.final_layer = tf.keras.layers.Dense(target_vocab_size)
 
-    def call(self,
-             inp,
-             tar,
-             enc_mask,
-             training):
+        self.training = training
+
+    def call(self, x):
+        inp, enc_mask, tar = x
 
         enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(enc_mask, tar)
 
-        enc_output = self.encoder(inp, training, enc_padding_mask)  # (batch_size, inp_seq_len, d_model)
+        enc_output = self.encoder(inp, enc_padding_mask, self.training)  # (batch_size, inp_seq_len, d_model)
 
         # dec_output.shape == (batch_size, tar_seq_len, d_model)
-        dec_output, attention_weights = self.decoder(tar, enc_output, combined_mask, dec_padding_mask, training)
+        dec_output, attention_weights = self.decoder(tar, enc_output, combined_mask, dec_padding_mask, self.training)
 
         final_output = self.final_layer(dec_output)  # (batch_size, tar_seq_len, target_vocab_size)
 
-        return final_output, attention_weights
+        return final_output
 
     def create_masks(self, inp, tar):
         # 编码器填充遮挡
