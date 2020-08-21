@@ -4,8 +4,6 @@ import numpy as np
 import os
 import re
 
-"/home/geb/PycharmProjects/asr/S0002/BAC009S0002W0122.wav"
-
 
 def extract_feature(wav_file: str):
     rate, sig = wav.read(wav_file)

@@ -1,34 +1,11 @@
 import os
-from utils import tokenization
 import numpy as np
 import tensorflow as tf
 import collections
 import logging
+from utils import tokenizer
 
 logging.basicConfig(level=logging.INFO)
-
-
-class tokenizer(object):
-    vocab = collections.OrderedDict()
-
-    def __init__(self):
-        self.load_vocab("/home/geb/PycharmProjects/asr-transformer/vocab_file/char.txt")
-
-    def load_vocab(self, vocab_file):
-        """Loads a vocabulary file into a dictionary."""
-
-        index = 0
-        with tf.io.gfile.GFile(vocab_file, "r") as reader:
-            while True:
-                token = reader.readline()
-                if not token:
-                    break
-                token = token.strip()
-                self.vocab[token] = index
-                index += 1
-
-    def token2id(self, token):
-        return self.vocab.get(token, self.vocab["[UNK]"])
 
 
 class InputExample(object):
@@ -58,13 +35,13 @@ class AsrProcessor(object):
         lines = self._read_data(os.path.join(data_dir, "train.tsv"))
         return self._create_example(lines, "train")
 
-    def get_dev_examples(self, data_dir, file_name="dev.tsv"):  # Development
-        return self._create_example(
-            self._read_data2(os.path.join(data_dir, file_name)), "dev")
+    def get_dev_examples(self, data_dir):  # Development
+        lines = self._read_data(os.path.join(data_dir, "dev.tsv"))
+        return self._create_example(lines, "dev")
 
-    def get_test_examples(self, data_dir, file_name="test.tsv"):
-        return self._create_example(
-            self._read_data2(os.path.join(data_dir, file_name)), "test")
+    def get_test_examples(self, data_dir):
+        lines = self._read_data(os.path.join(data_dir, "test.tsv"))
+        return self._create_example(lines, "test")
 
     def _create_example(self, lines, set_type):
         for (i, line) in enumerate(lines):
@@ -81,14 +58,20 @@ def convert_single_example(ex_index, example, max_source_length, max_target_leng
     input_feature = np.reshape(np.array(example.x.split(), dtype=np.float64), (-1, feature_dim))
     input_mask = [1 for _ in range(input_feature.shape[0])] + [0 for _ in
                                                                range(max_source_length - input_feature.shape[0])]
-    if input_feature.shape[0] < max_source_length:
-        input_feature = np.pad(input_feature, ((0, max_source_length - input_feature.shape[0]), (0, 0)))
+    if input_feature.shape[0] > max_source_length:
+        return
+    input_feature = np.pad(input_feature, ((0, max_source_length - input_feature.shape[0]), (0, 0)))
     target_text = example.y
     target_ids = []
-    for i, ch in enumerate(target_text):
-        target_ids.append(tokenizer.token2id(ch))
-    if len(target_ids) < max_target_length - 1:
-        target_ids = [tokenizer.vocab["[GO]"]] + target_ids + [tokenizer.vocab["[EOS]"]]
+    for word in target_text.split():
+        if word.encode("utf-8").isalpha():
+            target_ids.append(tokenizer.token2id(word))
+        else:
+            for ch in word:
+                target_ids.append(tokenizer.token2id(ch))
+    if len(target_ids) > max_target_length - 2:
+        return
+    target_ids = [tokenizer.vocab["[GO]"]] + target_ids + [tokenizer.vocab["[EOS]"]]
     for _ in range(max_target_length - len(target_ids)):
         target_ids.append(tokenizer.vocab["[PAD]"])
 
@@ -116,10 +99,12 @@ def file_based_convert_examples_to_features(examples, max_source_length, max_tar
                                             feature_dim=26):
     writer = tf.io.TFRecordWriter(output_file)
     for (ex_index, example) in enumerate(examples):
-        if ex_index % 5000 == 0:
+        if ex_index % 500 == 0:
             logging.info("Writing example %d ." % (ex_index))
         feature = convert_single_example(ex_index, example, max_source_length, max_target_length, tokenizer,
                                          feature_dim)
+        if feature is None:
+            continue
 
         def create_int_feature(values):
             f = tf.train.Feature(int64_list=tf.train.Int64List(value=list(values)))
@@ -142,8 +127,12 @@ def file_based_convert_examples_to_features(examples, max_source_length, max_tar
 if __name__ == '__main__':
     asr_processor = AsrProcessor()
 
-    examples = asr_processor.get_train_examples("../data")
+    data_dir = "/run/user/1000/gvfs/smb-share:server=jonas-dt.local,share=upload/asr-data/aishell-1-data"
 
-    tokenizer = tokenizer()
+    test_examples = asr_processor.get_test_examples(data_dir)
 
-    file_based_convert_examples_to_features(examples, 1000, 50, tokenizer, "../data/test.record")
+    train_examples = asr_processor.get_train_examples(data_dir)
+    file_based_convert_examples_to_features(train_examples, 1000, 50, tokenizer, "../data/train.record0")
+
+    # dev_examples = asr_processor.get_dev_examples(data_dir)
+    # file_based_convert_examples_to_features(dev_examples, 1000, 50, tokenizer, "../data/dev.record0")

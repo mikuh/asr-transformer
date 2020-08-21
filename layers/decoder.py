@@ -24,7 +24,6 @@ class Decoder(tf.keras.layers.Layer):
 
     def call(self, x, enc_output,
              look_ahead_mask, padding_mask, training):
-        seq_len = tf.shape(x)[1]
         attention_weights = {}
 
         x = self.embedding(x)  # (batch_size, target_seq_len, d_model)
@@ -92,7 +91,7 @@ if __name__ == '__main__':
     enc_output = sample_encoder_layer(x, mask=None, training=True)
 
     sample_decoder = Decoder(num_layers=2, d_model=512, num_heads=8,
-                             dff=2048, target_vocab_size=8000,
+                             dff=2048, target_vocab_size=4337,
                              maximum_position_encoding=5000)
 
     output, attn = sample_decoder(tf.random.uniform((32, 100)),
