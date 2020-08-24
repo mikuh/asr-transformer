@@ -9,6 +9,8 @@ class PositionEmbedding(tf.keras.layers.Layer):
                  use_dynamic_slicing=False,
                  max_sequence_length=None,
                  **kwargs):
+        # We need to have a default dtype of float32, since the inputs (which Keras
+        # usually uses to infer the dtype) will always be int32.
         if "dtype" not in kwargs:
             kwargs["dtype"] = "float32"
 

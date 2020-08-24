@@ -1,43 +1,25 @@
 import tensorflow as tf
-from layers.dense_einsum import DenseEinsum
-from utils.activations import gelu
 
 
-class PointWiseFFN(tf.keras.layers.Layer):
+class PointWiseFeedForwardNetwork(tf.keras.layers.Layer):
 
-    def __init__(self,
-                 d_model,
-                 intermediate_size,
-                 kernel_initializer,
-                 kernel_regularizer,
-                 kernel_constraint,
-                 bias_initializer,
-                 bias_regularizer,
-                 bias_constraint,
-                 activation=gelu,
-                 ):
-        self._intermediate_dense = DenseEinsum(
-            output_shape=intermediate_size,
-            activation=activation,
-            kernel_initializer=kernel_initializer,
-            kernel_regularizer=kernel_regularizer,
-            kernel_constraint=kernel_constraint,
-            bias_initializer=bias_initializer,
-            bias_regularizer=bias_regularizer,
-            bias_constraint=bias_constraint,
-            name="encoder/intermediate")
+    def __init__(self, intermediate_size, d_model, **kwargs):
+        super(PointWiseFeedForwardNetwork, self).__init__(**kwargs)
+        self.intermediate_size = intermediate_size
+        self.d_model = d_model
 
-        self._output_dense = DenseEinsum(
-            output_shape=d_model,
-            kernel_initializer=kernel_initializer,
-            bias_initializer=bias_initializer,
-            kernel_regularizer=kernel_regularizer,
-            bias_regularizer=bias_regularizer,
-            kernel_constraint=kernel_constraint,
-            bias_constraint=bias_constraint,
-            name="encoder/output")
+        # (batch_size, seq_len, intermediate_size)
+        self.dense1 = tf.keras.layers.Dense(intermediate_size, activation='relu')
+        # (batch_size, seq_len, d_model)
+        self.dense2 = tf.keras.layers.Dense(d_model)
 
-    def call(self, input):
-        intermediate_output = self._intermediate_dense(input)
-        layer_output = self._output_dense(intermediate_output)
-        return layer_output
+    def call(self, x):
+        x = self.dense1(x)
+        x = self.dense2(x)
+        return x
+
+
+if __name__ == '__main__':
+    sample_ffn = PointWiseFeedForwardNetwork(3072, 768)
+    x = tf.random.uniform((32, 1000, 768))
+    print(sample_ffn(x).shape)
