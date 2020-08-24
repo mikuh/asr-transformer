@@ -9,11 +9,11 @@ from utils import optimization
 from utils import distribution_utils
 import keras.backend as K
 
-num_layers = 4
+num_layers = 2
 source_length = 1000
 feature_dim = 26
 target_length = 50
-batch_size = 16
+batch_size = 32
 d_model = 512
 dff = 2048
 num_heads = 8
@@ -22,13 +22,13 @@ dropout_rate = 0.1
 pe_input = 4096
 pe_target = 512
 log_steps = 1
-model_dir = "results/asr-transfer/1/"
+model_dir = "results/asr-transfer/2/"
 learning_rate = 2e-5
 epochs = 150
 
-train = True
+train = False
 export = False
-predict = False
+predict = True
 
 import numpy as np
 
@@ -164,8 +164,8 @@ if __name__ == '__main__':
 
             transformer.compile(optimizer=optimizer, loss=loss_function, metrics=[metric_fn()])
 
-            # checkpoint_path = "results/asr-transfer/2/checkpoint-{:02d}".format(37)
-            # transformer.load_weights(checkpoint_path)
+            checkpoint_path = "results/asr-transfer/2/checkpoint-{:02d}".format(37)
+            transformer.load_weights(checkpoint_path)
 
             transformer.fit(
                 train_data,
@@ -186,7 +186,7 @@ if __name__ == '__main__':
                                       rate=dropout_rate,
                                       training=False)
             saved_model_path = "saved_models/{}".format(int(time.time()))
-            checkpoint_path = "results/asr-transfer/1/checkpoint-{:02d}".format(epochs)
+            checkpoint_path = "results/asr-transfer/2/checkpoint-{:02d}".format(37)
             transformer.load_weights(checkpoint_path)
             transformer.predict((tf.ones([1, 1000, 26]), tf.ones([1, 1000]), tf.ones([1, 49])))
 
@@ -220,13 +220,16 @@ if __name__ == '__main__':
                     a = a.split("\t")
                     y_true = u"".join(a[-1].split())
                     inp = np.reshape(np.array(a[0].split(), dtype=np.float64), (-1, 26))
+                    print(inp.shape)
                     mask = np.array([[1 if i < inp.shape[0] else 0 for i in range(1000)]])
                     inp = np.array([np.pad(inp, ((0, 1000 - inp.shape[0]), (0, 0)))])
+                    print(inp.shape)
                     _tar_inp = [1]
 
                     predicted_ids = []
                     for i in range(50):
                         tar_inp = np.array([_tar_inp])
+                        print(inp.shape, mask.shape, tar_inp.shape)
                         predictions = transformer.predict((inp, mask, tar_inp))
                         predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
                         predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32).numpy()[0][0]
@@ -239,7 +242,8 @@ if __name__ == '__main__':
 
                     y_predict = u"".join([tokenizer.id2token(id) for id in predicted_ids])
 
-                    print(y_true, y_predict)
+                    print(y_true)
+                    print(y_predict)
                     diff = Levenshtein.distance(y_true, y_predict)
                     print(diff)
                     right += len(y_true) - diff
